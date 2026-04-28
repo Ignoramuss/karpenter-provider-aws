@@ -33,6 +33,8 @@ type OptionsFields struct {
 	InterruptionQueue       *string
 	ReservedENIs            *int
 	DisableDryRun           *bool
+	AWSSDKRateLimitQPS      *int
+	AWSSDKRateLimitBurst    *int
 }
 
 func Options(overrides ...OptionsFields) *options.Options {
@@ -52,5 +54,7 @@ func Options(overrides ...OptionsFields) *options.Options {
 		InterruptionQueue:       lo.FromPtrOr(opts.InterruptionQueue, ""),
 		ReservedENIs:            lo.FromPtrOr(opts.ReservedENIs, 0),
 		DisableDryRun:           lo.FromPtrOr(opts.DisableDryRun, false),
+		AWSSDKRateLimitQPS:      lo.FromPtrOr(opts.AWSSDKRateLimitQPS, 0),
+		AWSSDKRateLimitBurst:    lo.FromPtrOr(opts.AWSSDKRateLimitBurst, 0),
 	}
 }

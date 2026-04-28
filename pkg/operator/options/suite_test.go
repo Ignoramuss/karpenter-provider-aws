@@ -63,7 +63,9 @@ var _ = Describe("Options", func() {
 			"--vm-memory-overhead-percent", "0.1",
 			"--interruption-queue", "env-cluster",
 			"--reserved-enis", "10",
-			"--disable-dry-run")
+			"--disable-dry-run",
+			"--aws-sdk-qps", "15",
+			"--aws-sdk-burst", "30")
 		Expect(err).ToNot(HaveOccurred())
 		expectOptionsEqual(opts, test.Options(test.OptionsFields{
 			ClusterCABundle:         lo.ToPtr("env-bundle"),
@@ -74,6 +76,8 @@ var _ = Describe("Options", func() {
 			InterruptionQueue:       lo.ToPtr("env-cluster"),
 			ReservedENIs:            lo.ToPtr(10),
 			DisableDryRun:           lo.ToPtr(true),
+			AWSSDKRateLimitQPS:      lo.ToPtr(15),
+			AWSSDKRateLimitBurst:    lo.ToPtr(30),
 		}))
 	})
 	It("should correctly fallback to env vars when CLI flags aren't set", func() {
@@ -85,6 +89,8 @@ var _ = Describe("Options", func() {
 		os.Setenv("INTERRUPTION_QUEUE", "env-cluster")
 		os.Setenv("RESERVED_ENIS", "10")
 		os.Setenv("DISABLE_DRY_RUN", "false")
+		os.Setenv("AWS_SDK_QPS", "25")
+		os.Setenv("AWS_SDK_BURST", "50")
 
 		// Add flags after we set the environment variables so that the parsing logic correctly refers
 		// to the new environment variable values
@@ -100,7 +106,17 @@ var _ = Describe("Options", func() {
 			InterruptionQueue:       lo.ToPtr("env-cluster"),
 			ReservedENIs:            lo.ToPtr(10),
 			DisableDryRun:           lo.ToPtr(false),
+			AWSSDKRateLimitQPS:      lo.ToPtr(25),
+			AWSSDKRateLimitBurst:    lo.ToPtr(50),
 		}))
+	})
+
+	It("should default aws-sdk-qps and aws-sdk-burst to 0 when not set", func() {
+		opts.AddFlags(fs)
+		err := opts.Parse(fs, "--cluster-name", "test-cluster")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(opts.AWSSDKRateLimitQPS).To(Equal(0))
+		Expect(opts.AWSSDKRateLimitBurst).To(Equal(0))
 	})
 
 	Context("Validation", func() {
@@ -123,6 +139,23 @@ var _ = Describe("Options", func() {
 			err := opts.Parse(fs, "--cluster-name", "test-cluster", "--reserved-enis", "-1")
 			Expect(err).To(HaveOccurred())
 		})
+		It("should fail when aws-sdk-qps is negative", func() {
+			err := opts.Parse(fs, "--cluster-name", "test-cluster", "--aws-sdk-qps", "-1")
+			Expect(err).To(HaveOccurred())
+		})
+		It("should fail when aws-sdk-burst is negative", func() {
+			err := opts.Parse(fs, "--cluster-name", "test-cluster", "--aws-sdk-burst", "-1")
+			Expect(err).To(HaveOccurred())
+		})
+		It("should fail when aws-sdk-burst is set without aws-sdk-qps", func() {
+			err := opts.Parse(fs, "--cluster-name", "test-cluster", "--aws-sdk-burst", "50")
+			Expect(err).To(HaveOccurred())
+		})
+		It("should default aws-sdk-burst to aws-sdk-qps when burst is not set", func() {
+			err := opts.Parse(fs, "--cluster-name", "test-cluster", "--aws-sdk-qps", "100")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(opts.AWSSDKRateLimitBurst).To(Equal(100))
+		})
 	})
 })
 
@@ -136,4 +169,6 @@ func expectOptionsEqual(optsA *options.Options, optsB *options.Options) {
 	Expect(optsA.InterruptionQueue).To(Equal(optsB.InterruptionQueue))
 	Expect(optsA.ReservedENIs).To(Equal(optsB.ReservedENIs))
 	Expect(optsA.DisableDryRun).To(Equal(optsB.DisableDryRun))
+	Expect(optsA.AWSSDKRateLimitQPS).To(Equal(optsB.AWSSDKRateLimitQPS))
+	Expect(optsA.AWSSDKRateLimitBurst).To(Equal(optsB.AWSSDKRateLimitBurst))
 }

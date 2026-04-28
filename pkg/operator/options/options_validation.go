@@ -28,6 +28,7 @@ func (o *Options) Validate() error {
 		o.validateVMMemoryOverheadPercent(),
 		o.validateReservedENIs(),
 		o.validateRequiredFields(),
+		o.validateAWSSDKRateLimit(),
 	)
 }
 
@@ -61,6 +62,22 @@ func (o *Options) validateReservedENIs() error {
 func (o *Options) validateRequiredFields() error {
 	if o.ClusterName == "" {
 		return fmt.Errorf("missing field, cluster-name")
+	}
+	return nil
+}
+
+func (o *Options) validateAWSSDKRateLimit() error {
+	if o.AWSSDKRateLimitQPS < 0 {
+		return fmt.Errorf("aws-sdk-qps cannot be negative")
+	}
+	if o.AWSSDKRateLimitBurst < 0 {
+		return fmt.Errorf("aws-sdk-burst cannot be negative")
+	}
+	if o.AWSSDKRateLimitBurst > 0 && o.AWSSDKRateLimitQPS == 0 {
+		return fmt.Errorf("aws-sdk-burst has no effect without aws-sdk-qps")
+	}
+	if o.AWSSDKRateLimitQPS > 0 && o.AWSSDKRateLimitBurst == 0 {
+		o.AWSSDKRateLimitBurst = o.AWSSDKRateLimitQPS
 	}
 	return nil
 }

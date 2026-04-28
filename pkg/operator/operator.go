@@ -37,6 +37,7 @@ import (
 	"github.com/aws/smithy-go"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -52,6 +53,7 @@ import (
 	prometheusv2 "github.com/jonathan-innis/aws-sdk-go-prometheus/v2"
 
 	sdk "github.com/aws/karpenter-provider-aws/pkg/aws"
+	"github.com/aws/karpenter-provider-aws/pkg/aws/ratelimit"
 	awscache "github.com/aws/karpenter-provider-aws/pkg/cache"
 	"github.com/aws/karpenter-provider-aws/pkg/operator/options"
 	"github.com/aws/karpenter-provider-aws/pkg/providers/amifamily"
@@ -105,6 +107,11 @@ type Operator struct {
 func NewOperator(ctx context.Context, operator *operator.Operator) (context.Context, *Operator) {
 	cfg := prometheusv2.WithPrometheusMetrics(WithUserAgent(lo.Must(config.LoadDefaultConfig(ctx))), crmetrics.Registry)
 	cfg.APIOptions = append(cfg.APIOptions, middleware.StructuredErrorHandler)
+	if opts := options.FromContext(ctx); opts != nil && opts.AWSSDKRateLimitQPS > 0 {
+		limiter := rate.NewLimiter(rate.Limit(opts.AWSSDKRateLimitQPS), opts.AWSSDKRateLimitBurst)
+		cfg.APIOptions = append(cfg.APIOptions, ratelimit.NewMiddleware(limiter))
+		log.FromContext(ctx).WithValues("qps", opts.AWSSDKRateLimitQPS, "burst", opts.AWSSDKRateLimitBurst).Info("enabled client-side AWS SDK rate limiting")
+	}
 	if cfg.Region == "" {
 		log.FromContext(ctx).V(1).Info("retrieving region from IMDS")
 		region, err := imds.NewFromConfig(cfg).GetRegion(ctx, nil)
